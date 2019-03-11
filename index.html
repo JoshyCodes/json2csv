@@ -1,0 +1,266 @@
+<html>
+
+<!-- Create button to fire the CSV generation-->
+<button id="conversion-button">Generate CSV</button>
+
+<script>
+
+    /**
+    *   Function getColors(data array)
+    *   
+    *   function to intake array and extract color options then 
+    *   combines them into single string and returns value.
+    **/
+    function getColors(data){
+
+        // if data is empty, return empty string
+        if (!data){
+            return ' ';
+        }
+
+        // create string to hold color values
+        let colors = '';
+
+        // foreach loop cycles array values
+        data.forEach(element => {
+
+            // when color option found, add to string
+            colors += " " + element.colorSKU;
+        });
+
+        // return string full of option values
+        return checkForMany(colors);
+    }
+
+    /**
+    *   Function getSizes(data array)
+    *   
+    *   function to intake array and extract sizing options then 
+    *   combines them into single string and returns value.
+    **/
+    function getSizes(data){
+
+        // if data is empty, return empty string
+        if(!data){
+            return ' ';
+        }
+        // create string to hold sizing values
+        let sizes = '';
+
+        // create new array from data element
+        const entries = Object.entries(data);
+
+        // foreach loop cycles array values
+        entries.forEach(el => {
+
+            // finds extra text from string to be removed
+            var n = (el[1].sku).lastIndexOf("-");
+
+            // removes extra chars for easy size visualization
+            sizes += " " + (el[1].sku).substr(n+1);
+        });
+
+        // return new string value of sizing options
+        return checkForMany(sizes);
+    }
+
+    /**
+    *   Function onlyUnique(value, index, self)
+    *   
+    *   heper function to determine if unique values in array
+    **/
+    function onlyUnique(value, index, self) { 
+        return self.indexOf(value) === index;
+    }
+
+    /**
+    *   Function checkForMany(data string)
+    *   
+    *   function taking in string then spiting and filtering to leave only
+    *   single instance of each value where multiple may have existed. 
+    **/
+    function checkForMany(data){
+
+        // split string into array
+        let mydata = data.split(" ");
+
+        // use onlyUnique helper function to filter multiple values
+        let unique = mydata.filter( onlyUnique );
+
+        // once filtered, sort entries for ease of reading
+        let sort_data = unique.sort();
+
+        // rejoin entries into string and return value
+        return sort_data.join(" ");
+    }
+
+    /**
+    *   Function sanitize(data string)
+    *   
+    *   function to remove potential bad entries by removing code type 
+    *   chars in order to perserve security and harden against XXS
+    **/
+    function sanitize(data) {
+ 
+	        return data.replace(/(<([^>]+)>)/ig,"");;
+        };
+
+    /**
+    *   Function getCleanerData(data string)
+    *   
+    *   function to intake string and encase it with quotes after removing extra
+    *   chars in order to perserve string when added to CSV.
+    **/
+    function getCleanerData(data){
+
+        // if data is empty, return empty string
+        if (!data){
+            return ' ';
+        }
+
+        // sanitize data string and replace any internal quotes per CSV standards
+        let sanitizedStr = sanitize(data).replace(/"/g,'""');
+
+        // add quotes while returning value
+        return '\"' + sanitizedStr + '\"';
+    }
+
+    /**
+    *   Function downloadFile(data array, fileName string)
+    *   
+    *   function to intake string and encase it with quotes after removing extra
+    *   chars in order to perserve string when added to CSV.
+    **/
+    function downloadFile(data, fileName) {
+
+        // convert data array to new blob object with CSV file type
+        const blob = new Blob([ data ], {
+            type : "application/csv;charset=utf-8;"
+        });
+
+        // safegaurd for IE browsers
+        if (window.navigator.msSaveBlob) {
+            navigator.msSaveBlob(blob, fileName);
+        } else {
+            // for none-IE browsers
+            // create a link element
+            const link = document.createElement("a");
+
+            // create new internal URL for blob object
+            const csvUrl = URL.createObjectURL(blob);
+
+            // set link destination to new url
+            link.href = csvUrl;
+
+            // set link as a hidden element
+            link.style = "visibility:hidden";
+
+            // set filename for the link element destination file
+            link.download = fileName;
+
+            //add created link element to body
+            document.body.appendChild(link);
+
+            // click hidden link element
+            link.click();
+
+            // remove hidden link element from body
+            document.body.removeChild(link);
+        }
+    }
+
+    /**
+    *   Function convertToCsv(data array)
+    *
+    *   function that header information and filename is setup,
+    *   then generates the csv content from the data array
+    **/
+    function convertToCsv(data){
+
+        // set header information for CSV file
+        const header = ['Name', 'Description', 'SKU', 'Price', 'Colors', 'Sizes'];
+
+        //set filename for downloaded csv file
+        const endFile = 'jsonToCsv.csv'
+
+        // add header information to beginning of array
+        data.unshift(header);
+
+        // create new string for csv content creation
+        let csvContent = '';
+
+        // foreach cycles through array groups and converts them into csv rows
+        data.forEach(arr => {
+
+            // divides values by commas for csv
+            let row = arr.join(",");
+
+            // sets group as a line in csv file
+            csvContent += row + "\r\n";
+        }); 
+
+        // send information to download function to recieve file
+        downloadFile(csvContent, endFile);
+    }
+
+    /**
+    *   Async function getReport
+    *
+    *   main function that gets the file data, parses the data, organizes the data,
+    *   then generates and downloads the new CSV file.
+    **/
+    const getReport = async function() {
+
+        // set file location for json data
+        const jsonUrl = 'eplunocrm-live-inventory-export-2.json';
+        //const jsonUrl = 'short.json';
+
+        // fetches the json file
+        const res = await fetch(jsonUrl);
+
+        // sends http response for the json file fetch
+        const json = await res.json();
+
+        // parse json into array
+        const entries = Object.entries(json)
+
+        // create new array to hold parsed/filtered data
+        let csvArray = [];
+        
+        // foreach loop cycles json and extracts needed information
+        entries.forEach(el => {
+
+            // create new line for string building
+            let line = [];
+
+            // adds name value to string
+            line.push(getCleanerData(el[1].nameEnglish));
+
+            // add description value to string
+            line.push(getCleanerData(el[1].descriptionEnglish));
+
+            // adds sku value to string
+            line.push(getCleanerData(el[1].sku));
+
+            // adds price value to string
+            line.push(getCleanerData(el[1].price));
+
+            // adds colors value to string
+            line.push(getColors(el[1].images));
+
+            // adds sizes value to string
+            line.push(getSizes(el[1].optionGroups));
+
+            // adds string value to array
+            csvArray.push(line);
+        });    
+
+        const getfile = convertToCsv(csvArray);
+    }
+
+    // set event listener to button for init of functions
+    document.getElementById('conversion-button').addEventListener('click', getReport);
+
+</script>
+
+</html>
